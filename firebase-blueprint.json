@@ -1,0 +1,206 @@
+{
+  "entities": {
+    "UserPublic": {
+      "title": "UserPublic",
+      "description": "Publicly visible non-PII profile summary for social feed authorship and mentions.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "handle": { "type": "string", "minLength": 1, "maxLength": 40, "pattern": "^[a-zA-Z0-9_\\.]+$" },
+        "photoUrl": { "type": "string", "maxLength": 500 },
+        "bio": { "type": "string", "maxLength": 200 },
+        "role": { "type": "string", "enum": ["customer", "owner", "admin"] },
+        "visibility": { "type": "string", "enum": ["public"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "role", "visibility", "createdAt", "updatedAt"]
+    },
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Strictly isolated PII document containing user email, phone, and language preference.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "preferredLang": { "type": "string", "enum": ["en", "hi"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "preferredLang", "updatedAt"]
+    },
+    "SocialPost": {
+      "title": "SocialPost",
+      "description": "Instagram-style storefront photo or reel post in the SoleWeb discovery feed.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessSlug": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "businessName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "businessLogo": { "type": "string", "maxLength": 500 },
+        "businessVerified": { "type": "boolean" },
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "categoryName": { "type": "string", "maxLength": 80 },
+        "city": { "type": "string", "maxLength": 80 },
+        "mediaUrl": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "mediaType": { "type": "string", "enum": ["photo", "video"] },
+        "posterUrl": { "type": "string", "maxLength": 500 },
+        "caption": { "type": "string", "maxLength": 1000 },
+        "tags": { "type": "array", "description": "Bounded up to 10 hashtag labels" },
+        "productId": { "type": "string", "maxLength": 128 },
+        "productName": { "type": "string", "maxLength": 120 },
+        "productPrice": { "type": "number" },
+        "likesCount": { "type": "integer" },
+        "commentsCount": { "type": "integer" },
+        "visibility": { "type": "string", "enum": ["public", "hidden"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "businessId", "businessSlug", "businessName", "authorUid", "mediaUrl", "mediaType", "likesCount", "commentsCount", "visibility", "createdAt", "updatedAt"]
+    },
+    "PostLike": {
+      "title": "PostLike",
+      "description": "User like marker under a social post, atomically paired with likesCount.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "postId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "postId", "createdAt"]
+    },
+    "PostComment": {
+      "title": "PostComment",
+      "description": "Comment on a social post, atomically incrementing commentsCount.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "postId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "authorAvatar": { "type": "string", "maxLength": 500 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "postId", "authorUid", "authorName", "text", "createdAt"]
+    },
+    "Story": {
+      "title": "Story",
+      "description": "Ephemeral 24-hour storefront highlight story.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessSlug": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "businessName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "businessLogo": { "type": "string", "maxLength": 500 },
+        "businessVerified": { "type": "boolean" },
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "mediaUrl": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "mediaType": { "type": "string", "enum": ["photo", "video"] },
+        "caption": { "type": "string", "maxLength": 280 },
+        "visibility": { "type": "string", "enum": ["public", "expired"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "businessId", "businessSlug", "businessName", "authorUid", "mediaUrl", "mediaType", "visibility", "createdAt", "expiresAt"]
+    },
+    "Follow": {
+      "title": "Follow",
+      "description": "Follower relationship between a user and a storefront.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "followerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessSlug": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "businessName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "businessLogo": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "followerUid", "businessId", "businessSlug", "businessName", "createdAt"]
+    },
+    "BusinessStats": {
+      "title": "BusinessStats",
+      "description": "Publicly readable follower counters for storefronts.",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "followersCount": { "type": "integer" },
+        "visibility": { "type": "string", "enum": ["public"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["businessId", "followersCount", "visibility", "updatedAt"]
+    },
+    "SavedPost": {
+      "title": "SavedPost",
+      "description": "Private user bookmark for a social post.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessSlug": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "businessName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "mediaUrl": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "caption": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "userId", "businessSlug", "businessName", "mediaUrl", "createdAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Explicit admin allowlist entry for role lookup.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublic" },
+      "description": "Public non-PII user summaries for social feed display."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Owner-isolated PII documents (email, phone, preferredLang)."
+    },
+    "/socialPosts/{postId}": {
+      "schema": { "$ref": "#/entities/SocialPost" },
+      "description": "Instagram-style social feed posts and reels."
+    },
+    "/socialPosts/{postId}/likes/{userId}": {
+      "schema": { "$ref": "#/entities/PostLike" },
+      "description": "Per-user likes subcollection synchronized atomically with post likesCount."
+    },
+    "/socialPosts/{postId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/PostComment" },
+      "description": "Comments subcollection under each social post."
+    },
+    "/stories/{storyId}": {
+      "schema": { "$ref": "#/entities/Story" },
+      "description": "24-hour storefront highlight stories."
+    },
+    "/follows/{followId}": {
+      "schema": { "$ref": "#/entities/Follow" },
+      "description": "User-to-business follow relationships."
+    },
+    "/businessStats/{businessId}": {
+      "schema": { "$ref": "#/entities/BusinessStats" },
+      "description": "Public follower count counters per storefront."
+    },
+    "/savedPosts/{userId}/items/{postId}": {
+      "schema": { "$ref": "#/entities/SavedPost" },
+      "description": "Private saved post bookmarks per user."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted admin allowlist records."
+    }
+  }
+}
