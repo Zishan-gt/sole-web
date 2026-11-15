@@ -295,7 +295,17 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return next;
       });
       try {
-        await toggleLikePostAtomic(post.id, firebaseUser.uid, currentlyLiked);
+        const finalLiked = await toggleLikePostAtomic(
+          post,
+          firebaseUser.uid,
+          currentlyLiked
+        );
+        setLikedPostIds((prev) => {
+          const next = new Set(prev);
+          if (finalLiked) next.add(post.id);
+          else next.delete(post.id);
+          return next;
+        });
       } catch (err) {
         setLikedPostIds((prev) => {
           const next = new Set(prev);

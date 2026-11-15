@@ -267,6 +267,100 @@ export function subscribeBusinessFollowersCount(
   );
 }
 
+export interface SocialPostSeedInput {
+  id: string;
+  businessId: string;
+  businessSlug: string;
+  businessName: string;
+  businessLogo?: string | null;
+  businessVerified?: boolean;
+  categoryName?: string | null;
+  city?: string | null;
+  mediaType: 'photo' | 'video';
+  mediaUrl: string;
+  posterUrl?: string | null;
+  caption?: string | null;
+  tags?: string[];
+  featuredProduct?: {
+    id: string;
+    name: string;
+    price: string | number;
+    discountPrice?: string | number | null;
+  } | null;
+}
+
+function optionalShortUrl(val: string | undefined | null, max = 500): string | undefined {
+  const cleaned = (val || '').trim();
+  if (!cleaned || cleaned.length > max) return undefined;
+  return cleaned;
+}
+
+export async function ensureSocialPostDoc(
+  post: SocialPostSeedInput,
+  uid: string
+): Promise<void> {
+  const path = `socialPosts/${post.id}`;
+  const postRef = doc(db, 'socialPosts', post.id);
+  try {
+    const snap = await getDoc(postRef);
+    if (snap.exists()) return;
+
+    const logo = optionalShortUrl(post.businessLogo, 500);
+    const poster = optionalShortUrl(post.posterUrl, 500);
+    const mediaUrl = clamp(post.mediaUrl, 500) || '/icon.svg';
+    const categoryName = clamp(post.categoryName, 80);
+    const city = clamp(post.city, 80);
+    const caption = clamp(post.caption, 1000);
+    const tags = (post.tags || [])
+      .map((t) => clamp(t, 40))
+      .filter(Boolean)
+      .slice(0, 10);
+
+    const rawPrice =
+      post.featuredProduct?.discountPrice ?? post.featuredProduct?.price;
+    const numericPrice =
+      rawPrice !== undefined && rawPrice !== null ? Number(rawPrice) : NaN;
+    const productId = clamp(post.featuredProduct?.id, 128);
+    const productName = clamp(post.featuredProduct?.name, 120);
+
+    await setDoc(postRef, {
+      id: post.id,
+      businessId: post.businessId,
+      businessSlug: clamp(post.businessSlug, 120) || 'storefront',
+      businessName: clamp(post.businessName, 120) || 'SoleWeb Storefront',
+      ...(logo ? { businessLogo: logo } : {}),
+      businessVerified: Boolean(post.businessVerified),
+      authorUid: uid,
+      ...(categoryName ? { categoryName } : {}),
+      ...(city ? { city } : {}),
+      mediaUrl,
+      mediaType: post.mediaType === 'video' ? 'video' : 'photo',
+      ...(poster ? { posterUrl: poster } : {}),
+      ...(caption ? { caption } : {}),
+      tags,
+      ...(productId ? { productId } : {}),
+      ...(productName ? { productName } : {}),
+      ...(Number.isFinite(numericPrice) && numericPrice >= 0
+        ? { productPrice: numericPrice }
+        : {}),
+      likesCount: 0,
+      commentsCount: 0,
+      visibility: 'public',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    // Handle concurrent creation race cleanly: if another user created it first, proceed
+    try {
+      const retrySnap = await getDoc(postRef);
+      if (retrySnap.exists()) return;
+    } catch {
+      // Fall through to structured error handler
+    }
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
 export async function checkIsPostLiked(postId: string, uid: string): Promise<boolean> {
   const path = `socialPosts/${postId}/likes/${uid}`;
   try {
@@ -278,17 +372,41 @@ export async function checkIsPostLiked(postId: string, uid: string): Promise<boo
 }
 
 export async function toggleLikePostAtomic(
-  postId: string,
+  postOrId: SocialPostSeedInput | string,
   uid: string,
   currentlyLiked: boolean
 ): Promise<boolean> {
+  const postId = typeof postOrId === 'string' ? postOrId : postOrId.id;
   const path = `socialPosts/${postId}/likes/${uid}`;
   try {
-    const batch = writeBatch(db);
+    if (typeof postOrId !== 'string') {
+      await ensureSocialPostDoc(postOrId, uid);
+    }
+
     const postRef = doc(db, 'socialPosts', postId);
     const likeRef = doc(db, 'socialPosts', postId, 'likes', uid);
+    const [likeSnap, postSnap] = await Promise.all([getDoc(likeRef), getDoc(postRef)]);
 
+    if (!postSnap.exists()) {
+      throw new Error(`Post ${postId} does not exist in Firestore yet`);
+    }
+
+    const actuallyLiked = likeSnap.exists();
+    const currentLikesCount = Number(postSnap.data()?.likesCount || 0);
+
+    // Reconcile if optimistic UI state was out of sync with Firestore
+    if (!currentlyLiked && actuallyLiked) {
+      return true;
+    }
+    if (currentlyLiked && !actuallyLiked) {
+      return false;
+    }
+
+    const batch = writeBatch(db);
     if (currentlyLiked) {
+      if (currentLikesCount <= 0) {
+        return false;
+      }
       batch.delete(likeRef);
       batch.update(postRef, {
         likesCount: increment(-1),
@@ -314,25 +432,31 @@ export async function toggleLikePostAtomic(
 }
 
 export async function addPostCommentAtomic(
-  postId: string,
+  postOrId: SocialPostSeedInput | string,
   uid: string,
   authorName: string,
   authorAvatar: string | null | undefined,
   text: string
 ): Promise<void> {
+  const postId = typeof postOrId === 'string' ? postOrId : postOrId.id;
   const commentId = `c_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const path = `socialPosts/${postId}/comments/${commentId}`;
   try {
+    if (typeof postOrId !== 'string') {
+      await ensureSocialPostDoc(postOrId, uid);
+    }
+
     const batch = writeBatch(db);
     const postRef = doc(db, 'socialPosts', postId);
     const commentRef = doc(db, 'socialPosts', postId, 'comments', commentId);
+    const safeAvatar = optionalShortUrl(authorAvatar, 500);
 
     batch.set(commentRef, {
       id: commentId,
       postId,
       authorUid: uid,
       authorName: clamp(authorName || 'Customer', 80),
-      ...(authorAvatar ? { authorAvatar: clamp(authorAvatar, 500) } : {}),
+      ...(safeAvatar ? { authorAvatar: safeAvatar } : {}),
       text: clamp(text, 500),
       createdAt: serverTimestamp(),
     });
@@ -355,14 +479,23 @@ export async function toggleFollowBusinessAtomic(
   const followId = `${uid}_${business.id}`;
   const path = `follows/${followId}`;
   try {
-    const batch = writeBatch(db);
     const followRef = doc(db, 'follows', followId);
     const statsRef = doc(db, 'businessStats', business.id);
-    const statsSnap = await getDoc(statsRef);
+    const [followSnap, statsSnap] = await Promise.all([
+      getDoc(followRef),
+      getDoc(statsRef),
+    ]);
+
+    const actuallyFollowing = followSnap.exists();
+    if (!currentlyFollowing && actuallyFollowing) return true;
+    if (currentlyFollowing && !actuallyFollowing) return false;
+
+    const batch = writeBatch(db);
+    const safeLogo = optionalShortUrl(business.logoUrl, 500);
 
     if (currentlyFollowing) {
       batch.delete(followRef);
-      if (statsSnap.exists()) {
+      if (statsSnap.exists() && Number(statsSnap.data()?.followersCount || 0) > 0) {
         batch.update(statsRef, {
           followersCount: increment(-1),
           updatedAt: serverTimestamp(),
@@ -373,9 +506,9 @@ export async function toggleFollowBusinessAtomic(
         id: followId,
         followerUid: uid,
         businessId: business.id,
-        businessSlug: clamp(business.slug, 120),
-        businessName: clamp(business.name, 120),
-        ...(business.logoUrl ? { businessLogo: clamp(business.logoUrl, 500) } : {}),
+        businessSlug: clamp(business.slug, 120) || 'storefront',
+        businessName: clamp(business.name, 120) || 'SoleWeb Storefront',
+        ...(safeLogo ? { businessLogo: safeLogo } : {}),
         createdAt: serverTimestamp(),
       });
       if (statsSnap.exists()) {
@@ -402,13 +535,7 @@ export async function toggleFollowBusinessAtomic(
 
 export async function toggleSavePostFirestore(
   uid: string,
-  post: {
-    id: string;
-    businessSlug: string;
-    businessName: string;
-    mediaUrl: string;
-    caption?: string | null;
-  },
+  post: SocialPostSeedInput,
   currentlySaved: boolean
 ): Promise<boolean> {
   const path = `savedPosts/${uid}/items/${post.id}`;
@@ -418,13 +545,15 @@ export async function toggleSavePostFirestore(
       await deleteDoc(ref);
       return false;
     }
+    await ensureSocialPostDoc(post, uid);
+    const safeCaption = clamp(post.caption, 300);
     await setDoc(ref, {
       postId: post.id,
       userId: uid,
-      businessSlug: clamp(post.businessSlug, 120),
-      businessName: clamp(post.businessName, 120),
-      mediaUrl: clamp(post.mediaUrl, 500),
-      ...(post.caption ? { caption: clamp(post.caption, 300) } : {}),
+      businessSlug: clamp(post.businessSlug, 120) || 'storefront',
+      businessName: clamp(post.businessName, 120) || 'SoleWeb Storefront',
+      mediaUrl: clamp(post.mediaUrl, 500) || '/icon.svg',
+      ...(safeCaption ? { caption: safeCaption } : {}),
       createdAt: serverTimestamp(),
     });
     return true;

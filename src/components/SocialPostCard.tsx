@@ -35,6 +35,7 @@ export const SocialPostCard: React.FC<SocialPostCardProps> = ({ post }) => {
     likedPostIds,
     followedBusinessIds,
     savedPostIds,
+    hydratePostLike,
     toggleLike,
     toggleFollow,
     toggleSavePost,
@@ -52,6 +53,10 @@ export const SocialPostCard: React.FC<SocialPostCardProps> = ({ post }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [muted, setMuted] = useState(true);
   const lastTapRef = useRef<number>(0);
+
+  useEffect(() => {
+    void hydratePostLike(post.id);
+  }, [post.id, hydratePostLike]);
 
   useEffect(() => {
     if (!commentsOpen || !post.inFirestore) return;
@@ -101,7 +106,7 @@ export const SocialPostCard: React.FC<SocialPostCardProps> = ({ post }) => {
     setSubmittingComment(true);
     try {
       await addPostCommentAtomic(
-        post.id,
+        post,
         firebaseUser.uid,
         profile.fullName || 'Customer',
         profile.avatarUrl,

@@ -93,6 +93,7 @@ export const BusinessProfilePage: React.FC<{ slug: string }> = ({ slug }) => {
     followedBusinessIds,
     likedPostIds,
     savedPostIds,
+    hydratePostLike,
     toggleFollow,
     toggleLike,
     toggleSavePost,
@@ -183,6 +184,13 @@ export const BusinessProfilePage: React.FC<{ slug: string }> = ({ slug }) => {
     }
   }, [profile]);
 
+  useEffect(() => {
+    if (!data?.posts?.length) return;
+    for (const p of data.posts.slice(0, 15)) {
+      void hydratePostLike(p.id);
+    }
+  }, [data?.posts, hydratePostLike]);
+
   // Subscribe to comments for active lightbox post
   const activePost = activePostIdx !== null && data?.posts[activePostIdx] ? data.posts[activePostIdx] : null;
   useEffect(() => {
@@ -190,6 +198,7 @@ export const BusinessProfilePage: React.FC<{ slug: string }> = ({ slug }) => {
       setLightboxComments([]);
       return;
     }
+    void hydratePostLike(activePost.id);
     let unsub = () => {};
     try {
       unsub = subscribePostComments(activePost.id, setLightboxComments);
@@ -197,7 +206,7 @@ export const BusinessProfilePage: React.FC<{ slug: string }> = ({ slug }) => {
       // Ignore if post isn't mirrored yet
     }
     return () => unsub();
-  }, [activePost?.id]);
+  }, [activePost?.id, hydratePostLike]);
 
   // Keyboard navigation for lightbox & story viewer
   useEffect(() => {
@@ -492,13 +501,14 @@ export const BusinessProfilePage: React.FC<{ slug: string }> = ({ slug }) => {
     setCommentSending(true);
     try {
       await addPostCommentAtomic(
-        activePost.id,
+        toUnifiedPost(activePost),
         firebaseUser.uid,
         profile.fullName || 'Customer',
         profile.avatarUrl,
         clean
       );
       setCommentDraft('');
+      void hydratePostLike(activePost.id);
     } catch {
       pushToast({ title: 'Could not post comment', variant: 'error' });
     } finally {

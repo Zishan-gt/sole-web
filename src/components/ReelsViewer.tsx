@@ -893,7 +893,7 @@ export const ReelsViewer: React.FC<ReelsViewerProps> = ({
     setSubmittingComment(true);
     try {
       await addPostCommentAtomic(
-        activeCommentsPost.id,
+        activeCommentsPost,
         firebaseUser.uid,
         profile.fullName || 'Customer',
         profile.avatarUrl,
