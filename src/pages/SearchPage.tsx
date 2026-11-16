@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpRight,
   BadgeCheck,
   Clock,
   Globe,
   Heart,
+  History,
   Mail,
   MapPin,
   MessageCircle,
@@ -12,6 +13,7 @@ import {
   Play,
   Search,
   Star,
+  X,
 } from 'lucide-react';
 import { SafeImage } from '../components/BusinessCard';
 import { GroundingGuidePanel } from '../components/GroundingGuidePanel';
@@ -24,6 +26,13 @@ import { useTheme } from '../context/ThemeContext';
 import { getT } from '../i18n/translations';
 import { apiFetch, trackAnalyticsEvent } from '../lib/api';
 import { buildGoogleMapsDirectionsUrl } from '../lib/maps';
+import {
+  addRecentSearch,
+  clearRecentSearches,
+  getRecentSearches,
+  removeRecentSearch,
+  type RecentSearchEntry,
+} from '../lib/recentSearches';
 import type { BusinessSummary, CategoryItem } from '../types/app';
 
 interface SearchPageProps {
@@ -67,12 +76,40 @@ export const SearchPage: React.FC<SearchPageProps> = ({ presetCategory, presetCi
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const [recentSearches, setRecentSearches] = useState<RecentSearchEntry[]>(() =>
+    getRecentSearches()
+  );
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const nextQ = initialParams.get('q') || '';
     setQ(nextQ);
+    if (nextQ.trim()) {
+      setRecentSearches(addRecentSearch(nextQ));
+    }
     if (initialParams.get('verified') === 'true') setVerifiedOnly(true);
     if (initialParams.get('sort')) setSort(initialParams.get('sort') || 'distance');
   }, [search]);
+
+  useEffect(() => {
+    const handleOutsideMouseDown = (event: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(event.target as Node)) {
+        setSearchFocused(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSearchFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   useEffect(() => {
     if (presetCategory !== undefined) {
@@ -163,49 +200,146 @@ export const SearchPage: React.FC<SearchPageProps> = ({ presetCategory, presetCi
     );
   }, [feedPosts, q]);
 
+  const visibleRecentSearches = useMemo(() => {
+    const clean = q.trim().toLowerCase();
+    if (!clean) return recentSearches;
+    return recentSearches.filter((entry) => entry.query.toLowerCase().includes(clean));
+  }, [recentSearches, q]);
+
+  const applySearchQuery = (nextQuery: string, saveHistory = true) => {
+    const trimmed = nextQuery.trim();
+    setQ(nextQuery);
+    if (saveHistory && trimmed) {
+      setRecentSearches(addRecentSearch(trimmed));
+    }
+    const nextParams = new URLSearchParams(window.location.search);
+    if (trimmed) nextParams.set('q', trimmed);
+    else nextParams.delete('q');
+    if (category) nextParams.set('category', category);
+    else nextParams.delete('category');
+    const qs = nextParams.toString();
+    const targetPath = window.location.pathname.startsWith('/category/')
+      ? window.location.pathname
+      : '/search';
+    window.history.replaceState({}, '', qs ? `${targetPath}?${qs}` : targetPath);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    setSearchFocused(false);
+    void fetchResults(1, false, trimmed);
+  };
+
   return (
     <div className="max-w-3xl mx-auto min-h-screen bg-white dark:bg-slate-900 border-x border-slate-200 dark:border-slate-800">
       {/* Minimal Twitter-Style Sticky Search Header */}
       <div className="sticky top-14 md:top-0 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="px-4 pt-3 pb-2 space-y-2.5">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const nextParams = new URLSearchParams(window.location.search);
-              if (q.trim()) nextParams.set('q', q.trim());
-              else nextParams.delete('q');
-              if (category) nextParams.set('category', category);
-              else nextParams.delete('category');
-              const qs = nextParams.toString();
-              const targetPath = window.location.pathname.startsWith('/category/')
-                ? window.location.pathname
-                : '/search';
-              window.history.replaceState({}, '', qs ? `${targetPath}?${qs}` : targetPath);
-              window.dispatchEvent(new PopStateEvent('popstate'));
-              void fetchResults(1, false);
-            }}
-            className="flex flex-col sm:flex-row gap-2"
-          >
-            <div className="flex-1 flex items-center gap-2.5 bg-slate-100 dark:bg-slate-950 border border-transparent focus-within:border-blue-500 focus-within:bg-white dark:focus-within:bg-slate-900 rounded-full px-4 h-10 transition-colors">
-              <Search className="w-4 h-4 text-slate-400 shrink-0" />
-              <input
-                type="text"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search SoleWeb businesses, dishes, services..."
-                className="w-full bg-transparent text-sm focus:outline-none"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <LocationPicker compact onSelect={() => void fetchResults(1, false)} />
-              <button
-                type="submit"
-                className="h-10 px-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold hover:opacity-90 transition-opacity shrink-0"
+          <div ref={searchBoxRef} className="relative">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                applySearchQuery(q, true);
+              }}
+              className="flex flex-col sm:flex-row gap-2"
+            >
+              <div className="flex-1 flex items-center gap-2.5 bg-slate-100 dark:bg-slate-950 border border-transparent focus-within:border-blue-500 focus-within:bg-white dark:focus-within:bg-slate-900 rounded-full px-4 h-10 transition-colors">
+                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  value={q}
+                  onFocus={() => setSearchFocused(true)}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search SoleWeb businesses, dishes, services..."
+                  aria-label="Search SoleWeb businesses, dishes, or services"
+                  aria-expanded={searchFocused}
+                  className="w-full bg-transparent text-sm focus:outline-none"
+                />
+                {q && (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setQ('');
+                      setSearchFocused(true);
+                    }}
+                    aria-label="Clear search text"
+                    className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <LocationPicker compact onSelect={() => void fetchResults(1, false)} />
+                <button
+                  type="submit"
+                  className="h-10 px-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold hover:opacity-90 transition-opacity shrink-0"
+                >
+                  Search
+                </button>
+              </div>
+            </form>
+
+            {searchFocused && (
+              <section
+                aria-label="Recent Searches"
+                className="absolute left-0 right-0 top-full mt-2 z-30 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-lg overflow-hidden"
               >
-                Search
-              </button>
-            </div>
-          </form>
+                <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                    Recent Searches
+                  </span>
+                  {recentSearches.length > 0 && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setRecentSearches(clearRecentSearches())}
+                      className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline px-1.5 py-1"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+
+                {visibleRecentSearches.length === 0 ? (
+                  <p className="px-4 py-4 text-xs text-slate-500 dark:text-slate-400">
+                    {recentSearches.length === 0
+                      ? 'No recent searches yet. Search for a shop, dish, or service.'
+                      : 'No matching recent searches.'}
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
+                    {visibleRecentSearches.map((entry) => (
+                      <li
+                        key={entry.query}
+                        className="flex items-center justify-between gap-2 px-2 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                      >
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => applySearchQuery(entry.query, true)}
+                          className="flex-1 min-h-[42px] px-2 py-2 flex items-center gap-2.5 text-left text-sm text-slate-800 dark:text-slate-100 min-w-0"
+                        >
+                          <History className="w-4 h-4 text-slate-400 shrink-0" />
+                          <span className="truncate">{entry.query}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRecentSearches(removeRecentSearch(entry.query));
+                          }}
+                          aria-label={`Remove ${entry.query} from recent searches`}
+                          className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
+          </div>
 
           {/* Compact Filter Strip */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">

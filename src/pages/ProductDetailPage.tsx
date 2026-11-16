@@ -180,7 +180,7 @@ export const ProductDetailPage: React.FC<{ slug: string; productId: string }> = 
             <button
               type="button"
               onClick={() => setEnquiryOpen(true)}
-              className="min-h-[46px] px-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-semibold inline-flex items-center justify-center gap-2"
+              className="min-h-[46px] px-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-semibold inline-flex items-center justify-center gap-2 whitespace-nowrap"
             >
               <Mail className="w-4 h-4" />
               <span>Enquire</span>

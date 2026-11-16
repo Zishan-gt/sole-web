@@ -38,6 +38,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isVerifiedUser() && (
+        request.auth.uid == 'Oe9ZDxYz0qN0dUBhXKNxH4PB6Y73' ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
         request.auth.token.email == 'zishanansari00000123@gmail.com'
       );

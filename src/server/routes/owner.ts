@@ -68,6 +68,7 @@ ownerRouter.get('/businesses', async (req: AuthRequest, res) => {
 // Create or update a business (onboarding wizard & profile editor)
 ownerRouter.post('/businesses', async (req: AuthRequest, res) => {
   try {
+
     const parsed = businessUpsertSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid business payload' });

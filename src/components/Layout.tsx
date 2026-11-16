@@ -24,9 +24,12 @@ import { usePWAInstall } from '../hooks/usePWAInstall';
 import { getT } from '../i18n/translations';
 import { Link, navigate, usePathname } from './RouterLink';
 
+const ROOT_ADMIN_UID = 'Oe9ZDxYz0qN0dUBhXKNxH4PB6Y73';
+
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { pathname } = usePathname();
-  const { profile, signOut } = useAuth();
+  const { firebaseUser, profile, signOut } = useAuth();
+  const isAdminUser = profile?.role === 'admin' || firebaseUser?.uid === ROOT_ADMIN_UID;
   const { dark, toggleTheme, locale, setLocale } = useTheme();
   const {
     notifications,
@@ -83,7 +86,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       icon: Store,
       active: pathname.startsWith('/dashboard') && pathname !== '/dashboard/posts',
     },
-    ...(profile?.role === 'admin'
+    ...(isAdminUser
       ? [{ to: '/admin', label: t.nav.admin, icon: Shield, active: pathname.startsWith('/admin') }]
       : []),
   ];
@@ -570,7 +573,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <span>{t.nav.dashboard}</span>
           </button>
 
-          {profile?.role === 'admin' && (
+          {isAdminUser && (
             <button
               type="button"
               onClick={() => {

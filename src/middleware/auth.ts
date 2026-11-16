@@ -22,10 +22,20 @@ export interface AuthRequest extends Request {
   profile?: AppUserProfile;
 }
 
+export const ROOT_ADMIN_UID = 'Oe9ZDxYz0qN0dUBhXKNxH4PB6Y73';
+
+export const ADMIN_UIDS = new Set<string>([ROOT_ADMIN_UID]);
+
 const ADMIN_EMAILS = new Set([
   'zishanansari00000123@gmail.com',
   'admin@soleweb.app',
 ]);
+
+export function isBootstrappedAdmin(uid: string, email?: string | null): boolean {
+  if (ADMIN_UIDS.has(uid)) return true;
+  if (email && ADMIN_EMAILS.has(email.toLowerCase())) return true;
+  return false;
+}
 
 async function generateUniqueHandle(email: string, name?: string): Promise<string> {
   const raw = (name || email.split('@')[0] || 'member')
@@ -53,7 +63,8 @@ async function syncProfileFromToken(
   name?: string,
   picture?: string
 ): Promise<AppUserProfile> {
-  const defaultRole = ADMIN_EMAILS.has(email.toLowerCase()) ? 'admin' : 'customer';
+  const isAdminAccount = isBootstrappedAdmin(uid, email);
+  const defaultRole = isAdminAccount ? 'admin' : 'customer';
 
   const existing = await db
     .select()
@@ -64,7 +75,7 @@ async function syncProfileFromToken(
   if (existing.length > 0) {
     const row = existing[0];
     const updates: Partial<typeof profiles.$inferInsert> = {};
-    if (ADMIN_EMAILS.has(email.toLowerCase()) && row.role !== 'admin') {
+    if (isAdminAccount && row.role !== 'admin') {
       updates.role = 'admin';
     }
     if (!row.handle) {
@@ -97,6 +108,7 @@ async function syncProfileFromToken(
       target: profiles.uid,
       set: {
         email,
+        ...(isAdminAccount ? { role: 'admin' as const } : {}),
         updatedAt: new Date(),
       },
     })
@@ -163,7 +175,7 @@ export const requireAdmin = async (
   if (!req.profile) {
     return res.status(401).json({ error: 'Authentication required' });
   }
-  if (req.profile.role !== 'admin') {
+  if (req.profile.role !== 'admin' && !ADMIN_UIDS.has(req.profile.uid)) {
     return res.status(403).json({ error: 'Administrator access required' });
   }
   next();

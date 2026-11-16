@@ -7,7 +7,7 @@ export interface SeoPayload {
   jsonLd?: Record<string, unknown>;
 }
 
-const DEFAULT_IMAGE = '/icon.svg';
+const DEFAULT_IMAGE = '/pwa-512x512.png';
 
 export function formatSlugTitle(slug: string): string {
   return decodeURIComponent(slug || '')

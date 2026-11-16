@@ -45,6 +45,7 @@ export interface BusinessSummary {
   status: 'draft' | 'published' | 'suspended';
   verificationStatus: 'not_requested' | 'pending' | 'approved' | 'rejected';
   isVerified: boolean;
+  plan?: string;
   ratingAvg: string;
   ratingCount: number;
   distanceKm?: number | null;

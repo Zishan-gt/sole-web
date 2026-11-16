@@ -1,8 +1,7 @@
 import { Router } from 'express';
-import { count, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { count, desc, eq, ilike, or } from 'drizzle-orm';
 import { db, pool } from '../../db/index.ts';
 import {
-  analyticsEvents,
   auditLog,
   businesses,
   categories,
@@ -13,7 +12,13 @@ import {
   reviews,
   verificationRequests,
 } from '../../db/schema.ts';
-import { requireAdmin, requireAuth, type AuthRequest } from '../../middleware/auth.ts';
+import {
+  ADMIN_UIDS,
+  ROOT_ADMIN_UID,
+  requireAdmin,
+  requireAuth,
+  type AuthRequest,
+} from '../../middleware/auth.ts';
 import { createAndPushNotification } from '../../lib/realtime.ts';
 
 export const adminRouter = Router();
@@ -35,7 +40,9 @@ adminRouter.get('/stats', async (_req, res) => {
       [bizCount],
       [ownerCount],
       [customerCount],
+      [adminCount],
       [prodCount],
+      [postCount],
       [revCount],
       [pendingVerifCount],
       [openReportsCount],
@@ -44,7 +51,9 @@ adminRouter.get('/stats', async (_req, res) => {
       db.select({ total: count() }).from(businesses),
       db.select({ total: count() }).from(profiles).where(eq(profiles.role, 'owner')),
       db.select({ total: count() }).from(profiles).where(eq(profiles.role, 'customer')),
+      db.select({ total: count() }).from(profiles).where(eq(profiles.role, 'admin')),
       db.select({ total: count() }).from(products),
+      db.select({ total: count() }).from(posts),
       db.select({ total: count() }).from(reviews),
       db
         .select({ total: count() })
@@ -60,11 +69,14 @@ adminRouter.get('/stats', async (_req, res) => {
       businesses: bizCount?.total ?? 0,
       owners: ownerCount?.total ?? 0,
       customers: customerCount?.total ?? 0,
+      admins: adminCount?.total ?? 0,
       products: prodCount?.total ?? 0,
+      posts: postCount?.total ?? 0,
       reviews: revCount?.total ?? 0,
       pendingVerifications: pendingVerifCount?.total ?? 0,
       openReports: openReportsCount?.total ?? 0,
       eventsToday: searchesTodayRes.rows[0]?.total ?? 0,
+      rootAdminUid: ROOT_ADMIN_UID,
     });
   } catch (err) {
     console.error('GET /api/admin/stats failed:', err);
@@ -344,6 +356,8 @@ adminRouter.patch('/businesses/:id', async (req: AuthRequest, res) => {
     const isVerified =
       req.body.isVerified !== undefined ? Boolean(req.body.isVerified) : biz.isVerified;
     const status = req.body.status !== undefined ? req.body.status : biz.status;
+    const plan =
+      req.body.plan === 'pro' || req.body.plan === 'free' ? req.body.plan : biz.plan;
 
     const [updated] = await db
       .update(businesses)
@@ -351,6 +365,7 @@ adminRouter.patch('/businesses/:id', async (req: AuthRequest, res) => {
         isVerified,
         verificationStatus: isVerified ? 'approved' : biz.verificationStatus === 'approved' ? 'not_requested' : biz.verificationStatus,
         status,
+        plan,
         updatedAt: new Date(),
       })
       .where(eq(businesses.id, biz.id))
@@ -361,7 +376,7 @@ adminRouter.patch('/businesses/:id', async (req: AuthRequest, res) => {
       action: 'admin_business_updated',
       entity: 'business',
       entityId: biz.id,
-      meta: { isVerified, status },
+      meta: { isVerified, status, plan },
     });
 
     res.json({ business: updated });
@@ -370,10 +385,140 @@ adminRouter.patch('/businesses/:id', async (req: AuthRequest, res) => {
   }
 });
 
-// Users list & role management
-adminRouter.get('/users', async (_req, res) => {
+adminRouter.delete('/businesses/:id', async (req: AuthRequest, res) => {
   try {
-    const list = await db.select().from(profiles).orderBy(desc(profiles.createdAt));
+    const [biz] = await db
+      .select({ id: businesses.id, name: businesses.name })
+      .from(businesses)
+      .where(eq(businesses.id, req.params.id))
+      .limit(1);
+    if (!biz) return res.status(404).json({ error: 'Business not found' });
+
+    await db.delete(businesses).where(eq(businesses.id, biz.id));
+
+    await db.insert(auditLog).values({
+      actorId: req.profile!.id,
+      action: 'admin_business_deleted',
+      entity: 'business',
+      entityId: biz.id,
+      meta: { businessName: biz.name },
+    });
+
+    res.json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete business' });
+  }
+});
+
+// Posts & Reels moderation
+adminRouter.get('/posts', async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    const baseQuery = db
+      .select({
+        id: posts.id,
+        businessId: posts.businessId,
+        type: posts.type,
+        mediaUrl: posts.mediaUrl,
+        posterUrl: posts.posterUrl,
+        caption: posts.caption,
+        isHidden: posts.isHidden,
+        isPinned: posts.isPinned,
+        createdAt: posts.createdAt,
+        businessName: businesses.name,
+        businessSlug: businesses.slug,
+        businessCity: businesses.city,
+      })
+      .from(posts)
+      .innerJoin(businesses, eq(posts.businessId, businesses.id));
+
+    const list = q
+      ? await baseQuery
+          .where(or(ilike(businesses.name, `%${q}%`), ilike(posts.caption, `%${q}%`)))
+          .orderBy(desc(posts.createdAt))
+          .limit(80)
+      : await baseQuery.orderBy(desc(posts.createdAt)).limit(80);
+
+    res.json({ posts: list });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load posts' });
+  }
+});
+
+adminRouter.patch('/posts/:id', async (req: AuthRequest, res) => {
+  try {
+    const [existing] = await db
+      .select()
+      .from(posts)
+      .where(eq(posts.id, req.params.id))
+      .limit(1);
+    if (!existing) return res.status(404).json({ error: 'Post not found' });
+
+    const isHidden =
+      req.body.isHidden !== undefined ? Boolean(req.body.isHidden) : existing.isHidden;
+
+    const [updated] = await db
+      .update(posts)
+      .set({ isHidden, updatedAt: new Date() })
+      .where(eq(posts.id, existing.id))
+      .returning();
+
+    await db.insert(auditLog).values({
+      actorId: req.profile!.id,
+      action: isHidden ? 'admin_post_hidden' : 'admin_post_restored',
+      entity: 'post',
+      entityId: existing.id,
+      meta: { isHidden },
+    });
+
+    res.json({ post: updated });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update post visibility' });
+  }
+});
+
+adminRouter.delete('/posts/:id', async (req: AuthRequest, res) => {
+  try {
+    const [existing] = await db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(eq(posts.id, req.params.id))
+      .limit(1);
+    if (!existing) return res.status(404).json({ error: 'Post not found' });
+
+    await db.delete(posts).where(eq(posts.id, existing.id));
+
+    await db.insert(auditLog).values({
+      actorId: req.profile!.id,
+      action: 'admin_post_deleted',
+      entity: 'post',
+      entityId: existing.id,
+      meta: {},
+    });
+
+    res.json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete post' });
+  }
+});
+
+// Users list & role management
+adminRouter.get('/users', async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    const list = q
+      ? await db
+          .select()
+          .from(profiles)
+          .where(
+            or(
+              ilike(profiles.fullName, `%${q}%`),
+              ilike(profiles.email, `%${q}%`),
+              ilike(profiles.uid, `%${q}%`)
+            )
+          )
+          .orderBy(desc(profiles.createdAt))
+      : await db.select().from(profiles).orderBy(desc(profiles.createdAt));
     res.json({ users: list });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load users' });
@@ -386,6 +531,21 @@ adminRouter.patch('/users/:id/role', async (req: AuthRequest, res) => {
     if (!['customer', 'owner', 'admin'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
     }
+
+    const [target] = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.id, req.params.id))
+      .limit(1);
+    if (!target) {
+      return res.status(404).json({ error: 'User profile not found' });
+    }
+    if (ADMIN_UIDS.has(target.uid) && role !== 'admin') {
+      return res.status(403).json({
+        error: `Root Admin ID (${target.uid}) is protected and cannot be demoted.`,
+      });
+    }
+
     const [updated] = await db
       .update(profiles)
       .set({ role, updatedAt: new Date() })
@@ -397,7 +557,7 @@ adminRouter.patch('/users/:id/role', async (req: AuthRequest, res) => {
       action: 'user_role_changed',
       entity: 'profile',
       entityId: req.params.id,
-      meta: { role },
+      meta: { role, targetUid: target.uid },
     });
 
     res.json({ user: updated });
@@ -466,7 +626,22 @@ adminRouter.post('/import-csv', async (req: AuthRequest, res) => {
 // Audit log
 adminRouter.get('/audit-log', async (_req, res) => {
   try {
-    const list = await db.select().from(auditLog).orderBy(desc(auditLog.createdAt)).limit(50);
+    const list = await db
+      .select({
+        id: auditLog.id,
+        action: auditLog.action,
+        entity: auditLog.entity,
+        entityId: auditLog.entityId,
+        meta: auditLog.meta,
+        createdAt: auditLog.createdAt,
+        actorName: profiles.fullName,
+        actorEmail: profiles.email,
+        actorUid: profiles.uid,
+      })
+      .from(auditLog)
+      .leftJoin(profiles, eq(auditLog.actorId, profiles.id))
+      .orderBy(desc(auditLog.createdAt))
+      .limit(50);
     res.json({ logs: list });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load audit log' });

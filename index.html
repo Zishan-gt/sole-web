@@ -2,38 +2,59 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SoleWeb – Discover Local Businesses, Products & Services</title>
-    <meta
-      name="description"
-      content="Search trusted local businesses worldwide, browse Instagram-style storefronts, compare products and services, and get instant Google Maps directions."
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>SoleWeb – Discover Local Businesses, Products &amp; Services</title>
+    <meta name="description" content="Global local business discovery platform with Instagram-style storefronts, full-text &amp; spatial search, inventory management, and real-time notifications." />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="application-name" content="SoleWeb" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+
+    <!-- Open Graph / Social Sharing -->
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:site_name" content="SoleWeb" />
-    <meta property="og:title" content="SoleWeb – Discover Local Businesses, Products & Services" />
-    <meta
-      property="og:description"
-      content="Search trusted local businesses worldwide, browse Instagram-style storefronts, compare products and services, and get instant Google Maps directions."
-    />
+    <meta property="og:title" content="SoleWeb – Discover Local Businesses, Products &amp; Services" />
+    <meta property="og:description" content="Global local business discovery platform with Instagram-style storefronts, full-text &amp; spatial search, inventory management, and real-time notifications." />
+    <meta property="og:image" content="/pwa-512x512.png" />
+    <meta property="og:image:alt" content="SoleWeb – Discover Local Businesses, Products &amp; Services" />
+
+    <!-- Twitter / X Cards -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="SoleWeb – Discover Local Businesses, Products & Services" />
-    <meta
-      name="twitter:description"
-      content="Search trusted local businesses worldwide, browse Instagram-style storefronts, compare products and services, and get instant Google Maps directions."
-    />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="twitter:title" content="SoleWeb – Discover Local Businesses, Products &amp; Services" />
+    <meta name="twitter:description" content="Global local business discovery platform with Instagram-style storefronts, full-text &amp; spatial search, inventory management, and real-time notifications." />
+    <meta name="twitter:image" content="/pwa-512x512.png" />
+
+    <!-- PWA & Icons -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="SoleWeb" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <!-- Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
       rel="stylesheet"
     />
+
+    <!-- Prevent dark-mode flash before React hydrates -->
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('soleweb_theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Structured Data -->
     <script id="soleweb-route-jsonld" type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -41,7 +62,7 @@
         "name": "SoleWeb",
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "All",
-        "description": "Global local business discovery platform featuring verified storefronts, real-time inventory, Instagram-style profiles, and instant map directions.",
+        "description": "Global local business discovery platform with Instagram-style storefronts, full-text & spatial search, inventory management, and real-time notifications.",
         "offers": {
           "@type": "Offer",
           "price": "0",
@@ -52,6 +73,14 @@
   </head>
   <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
     <div id="root"></div>
+    <noscript>
+      <div style="padding:24px;max-width:540px;margin:48px auto;font-family:system-ui,-apple-system,sans-serif;text-align:center;">
+        <h1 style="font-size:20px;margin-bottom:8px;">SoleWeb</h1>
+        <p style="color:#475569;font-size:14px;line-height:1.5;">
+          Please enable JavaScript in your browser to explore verified local storefronts, reels, products, and live map directions on SoleWeb.
+        </p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

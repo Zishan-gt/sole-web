@@ -1258,7 +1258,7 @@ export const BusinessProfilePage: React.FC<{ slug: string }> = ({ slug }) => {
                             <div className="flex items-center gap-2">
                               <Link
                                 to={`/b/${business.slug}/p/${prod.id}`}
-                                className="min-h-[36px] px-3.5 rounded-full border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center hover:bg-slate-50 dark:hover:bg-slate-800"
+                                className="min-h-[36px] px-3.5 rounded-full border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
                               >
                                 Details
                               </Link>
@@ -1268,7 +1268,7 @@ export const BusinessProfilePage: React.FC<{ slug: string }> = ({ slug }) => {
                                   setEnquiryProductId(prod.id);
                                   setEnquiryOpen(true);
                                 }}
-                                className="min-h-[36px] px-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold hover:opacity-90"
+                                className="min-h-[36px] px-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold hover:opacity-90 whitespace-nowrap"
                               >
                                 {t.profile.enquire}
                               </button>

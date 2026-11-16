@@ -73,6 +73,7 @@ export const profiles = pgTable(
     avatarUrl: text('avatar_url').default(''),
     role: userRoleEnum('role').notNull().default('customer'),
     preferredLang: text('preferred_lang').notNull().default('en'),
+    businessAccessUntil: timestamp('business_access_until'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -106,6 +107,7 @@ export const businesses = pgTable('businesses', {
   whatsapp: text('whatsapp').default(''),
   email: text('email').default(''),
   website: text('website').default(''),
+  upiId: text('upi_id').default(''),
   googleMapsUrl: text('google_maps_url').default(''),
   addressLine: text('address_line').default(''),
   area: text('area').default(''),
@@ -346,6 +348,94 @@ export const chatMessages = pgTable('chat_messages', {
   isRead: boolean('is_read').notNull().default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+
+export const platformPaymentSettings = pgTable('platform_payment_settings', {
+  id: text('id').primaryKey().default('default'),
+  planName: text('plan_name').notNull().default('SoleWeb Pro'),
+  monthlyPriceUsd: numeric('monthly_price_usd', { precision: 10, scale: 2 })
+    .notNull()
+    .default('3.00'),
+  upiId: text('upi_id').notNull().default(''),
+  upiPayeeName: text('upi_payee_name').notNull().default('SoleWeb'),
+  merchantNote: text('merchant_note')
+    .notNull()
+    .default('SoleWeb Pro Monthly Subscription'),
+  webhookSecret: text('webhook_secret').notNull().default(''),
+  updatedBy: uuid('updated_by').references(() => profiles.id, { onDelete: 'set null' }),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const subscriptionPaymentSessions = pgTable(
+  'subscription_payment_sessions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    profileId: uuid('profile_id')
+      .references(() => profiles.id, { onDelete: 'cascade' })
+      .notNull(),
+    businessId: uuid('business_id').references(() => businesses.id, { onDelete: 'set null' }),
+    transactionRef: text('transaction_ref').notNull().unique(),
+    countryCode: text('country_code').notNull().default('IN'),
+    currencyCode: text('currency_code').notNull().default('INR'),
+    amountUsd: numeric('amount_usd', { precision: 10, scale: 2 }).notNull().default('3.00'),
+    exchangeRate: numeric('exchange_rate', { precision: 14, scale: 6 })
+      .notNull()
+      .default('84.500000'),
+    convertedAmount: numeric('converted_amount', { precision: 14, scale: 2 }).notNull(),
+    inrSettlementAmount: numeric('inr_settlement_amount', { precision: 12, scale: 2 }).notNull(),
+    payeeUpiId: text('payee_upi_id').notNull(),
+    payeeName: text('payee_name').notNull().default('SoleWeb'),
+    upiUri: text('upi_uri').notNull(),
+    status: text('status').notNull().default('pending'),
+    utrReference: text('utr_reference').default(''),
+    payerUpiId: text('payer_upi_id').default(''),
+    verifiedSource: text('verified_source').default(''),
+    paymentId: uuid('payment_id'),
+    expiresAt: timestamp('expires_at').notNull(),
+    paidAt: timestamp('paid_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('sub_sessions_profile_idx').on(table.profileId),
+    index('sub_sessions_status_idx').on(table.status),
+    index('sub_sessions_expires_idx').on(table.expiresAt),
+  ]
+);
+
+export const subscriptionPayments = pgTable(
+  'subscription_payments',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    profileId: uuid('profile_id')
+      .references(() => profiles.id, { onDelete: 'cascade' })
+      .notNull(),
+    businessId: uuid('business_id').references(() => businesses.id, { onDelete: 'set null' }),
+    planCode: text('plan_code').notNull().default('pro_monthly'),
+    countryCode: text('country_code').notNull().default('IN'),
+    currencyCode: text('currency_code').notNull().default('INR'),
+    amountUsd: numeric('amount_usd', { precision: 10, scale: 2 }).notNull().default('3.00'),
+    exchangeRate: numeric('exchange_rate', { precision: 14, scale: 6 })
+      .notNull()
+      .default('84.500000'),
+    convertedAmount: numeric('converted_amount', { precision: 14, scale: 2 }).notNull(),
+    inrSettlementAmount: numeric('inr_settlement_amount', { precision: 12, scale: 2 }).notNull(),
+    payeeUpiId: text('payee_upi_id').notNull(),
+    utrReference: text('utr_reference').notNull(),
+    payerUpiId: text('payer_upi_id').default(''),
+    status: text('status').notNull().default('pending'),
+    adminNote: text('admin_note').default(''),
+    periodStart: timestamp('period_start'),
+    periodEnd: timestamp('period_end'),
+    reviewedBy: uuid('reviewed_by').references(() => profiles.id, { onDelete: 'set null' }),
+    reviewedAt: timestamp('reviewed_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('sub_payments_profile_idx').on(table.profileId),
+    index('sub_payments_status_idx').on(table.status),
+  ]
+);
 
 // Relations
 export const profilesRelations = relations(profiles, ({ many }) => ({

@@ -329,6 +329,16 @@ async function resolveRouteMeta(reqPath: string, origin: string): Promise<SsrMet
     };
   }
 
+  if (clean === '/' || clean === '/search') {
+    return {
+      title: 'SoleWeb – Discover Local Businesses, Products & Services',
+      description:
+        'Global local business discovery platform with Instagram-style storefronts, full-text & spatial search, inventory management, and real-time notifications.',
+      ogType: 'website',
+      canonicalPath: clean,
+    };
+  }
+
   return null;
 }
 
@@ -348,7 +358,7 @@ export async function injectSeoMetaIntoHtml(
       ? meta.image.startsWith('http')
         ? meta.image
         : `${origin}${meta.image.startsWith('/') ? '' : '/'}${meta.image}`
-      : `${origin}/icon.svg`;
+      : `${origin}/pwa-512x512.png`;
 
     let html = templateHtml;
     html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtmlAttr(meta.title)}</title>`);
@@ -377,14 +387,32 @@ export async function injectSeoMetaIntoHtml(
       `<meta name="twitter:description" content="${escapeHtmlAttr(meta.description)}" />`
     );
 
-    const extraHeadTags = [
-      `<link rel="canonical" href="${escapeHtmlAttr(absCanonical)}" />`,
-      `<meta property="og:url" content="${escapeHtmlAttr(absCanonical)}" />`,
-      `<meta property="og:image" content="${escapeHtmlAttr(absImage)}" />`,
-      `<meta name="twitter:image" content="${escapeHtmlAttr(absImage)}" />`,
-    ].join('\n    ');
+    const extraHeadTags: string[] = [];
 
-    html = html.replace('</head>', `    ${extraHeadTags}\n  </head>`);
+    if (/<meta\s+property="og:image"\s+content="[^"]*"\s*\/?>/i.test(html)) {
+      html = html.replace(
+        /<meta\s+property="og:image"\s+content="[^"]*"\s*\/?>/i,
+        `<meta property="og:image" content="${escapeHtmlAttr(absImage)}" />`
+      );
+    } else {
+      extraHeadTags.push(`<meta property="og:image" content="${escapeHtmlAttr(absImage)}" />`);
+    }
+
+    if (/<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/?>/i.test(html)) {
+      html = html.replace(
+        /<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/?>/i,
+        `<meta name="twitter:image" content="${escapeHtmlAttr(absImage)}" />`
+      );
+    } else {
+      extraHeadTags.push(`<meta name="twitter:image" content="${escapeHtmlAttr(absImage)}" />`);
+    }
+
+    extraHeadTags.push(
+      `<link rel="canonical" href="${escapeHtmlAttr(absCanonical)}" />`,
+      `<meta property="og:url" content="${escapeHtmlAttr(absCanonical)}" />`
+    );
+
+    html = html.replace('</head>', `    ${extraHeadTags.join('\n    ')}\n  </head>`);
 
     if (meta.jsonLd) {
       html = html.replace(
